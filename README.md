@@ -1,109 +1,98 @@
-# Kong-Fu-Chess — איטרציה 1: קלט/פלט וולידציה של הלוח
+# Kung-Fu Chess — Iteration 1: Board and Pieces (pure model + text I/O)
 
-## מה בקובץ הזה
-Refactoring של `main.py` המקורי (parsing + validation + printing של הלוח מטקסט קלט),
-מחולק ל-5 מחלקות עסקיות ממוקדות (לא יותר!), על בסיס הדרישות במסמך
-`kong_fu_chess_requirements.md` וההנחיות הנוספות (DRY, SRP, Encapsulation,
-קונפיגורציה במקום strings קשיחים, ללא monkey-patching בטסטים, גמישות
-מדודה ולא יותר מזה, ותמיכה עתידית נוחה לפי סעיפים 3.1–3.2 של המסמך).
+## מה יש כאן
+מימוש מלא של **Phase 1–2** מה-roadmap הרשמי (`kung_fu_chess_architecture.md`):
+1. **Board Presentation without UI** — Text I/O / test framework
+2. **Clean State** — המודל הטהור: `Position`, `Piece`, `Board`
 
-**התנהגות זהה לחלוטין לקוד המקורי** — נבדק ישירות מול הגרסה הישנה על כל
-תרחישי הקצה (טוקן לא חוקי, אי-התאמת רוחב שורות, קלט ריק, בלי פקודת הדפסה,
-טוקנים בקונבנציית case חלופית).
+מבנה החבילות, שמות המחלקות, וכללי ה-notation תואמים **בדיוק** למסמכי
+הארכיטקטורה והדרישות שסופקו (`kung_fu_chess_architecture.md`,
+`kung_fu_chess_requirements.md`, ותמונות ה-Ultracode). זו לא ארכיטקטורה
+שאני בחרתי — זו הארכיטקטורה שנדרשה, מיושמת כלשונה.
 
-## מבנה החבילה — 5 מחלקות עסקיות
+**שינוי מהותי מהגרסה הקודמת:** בסבב הקודם צמצמתי ל-5 מחלקות "שטוחות"
+לפי עקרון "לא להגזים". עכשיו יש מסמך ארכיטקטורה רשמי ומחייב מהקורס עם
+שמות קבצים ומחלקות מדויקים (`Position`, `Piece`, `Board`, `BoardParser`,
+`BoardPrinter`, `TextTestRunner`, `ScriptParser`, `PrintBoard`) — אז אני
+עוקבת אחריו במדויק, גם אם יש יותר קבצים מקודם. זו לא חריגה מ"לא להגזים" —
+זו פשוט דרישה מפורשת וברורה יותר שדורסת את ברירת המחדל שלי.
+
+## מבנה החבילה
 
 ```
-main.py                     # entry point דק בלבד — לא מכיל לוגיקה
-kfc/
-  piece_registry.py         # PieceRegistry (+ Piece כ-value object פנימי)
-  board.py                  # Board — אחסון הרשת + רינדור חזרה לטקסט
-  input_parser.py           # InputParser — טקסט → שורות-לוח + פקודות מזוהות
-  board_validator.py        # BoardValidator — ולידציה טהורה, זורקת חריגות
-  app.py                    # KongFuChessApp — מחבר הכל (dependency injection)
-  exceptions.py             # חריגות דומיין (לא "מחלקת לוגיקה" — הגדרת קודי שגיאה)
-tests/                      # 34 unit tests, 100% coverage (pytest --cov)
+main.py                                # entry point דק — VPL מריץ אותו ישירות
+kungfu_chess/
+  model/                                # המודל הטהור — בלי רינדור, בלי I/O, בלי כללי משחק
+    position.py                         # Position — value object (row, col)
+    piece.py                            # Piece — id, color, kind, cell, state (idle/moving/captured)
+    board.py                            # Board — אחסון לוגי: add/remove/piece_at/move/in_bounds
+    exceptions.py                       # DuplicateOccupancyError, PieceNotFoundError, OutOfBoundsError
+  io/                                   # I/O משותף לטקסט — לא תלוי ב-texttests
+    notation.py                         # טבלת token <-> (color, kind) המשותפת ל-parser ול-printer
+    board_parser.py                     # BoardParser — טקסט -> Board
+    board_printer.py                    # BoardPrinter — Board -> טקסט
+    exceptions.py                       # UnknownTokenError, RowWidthMismatchError
+  texttests/                            # סימולציית קלט/פלט טקסטואלית (Rule 2)
+    script_parser.py                    # ScriptParser — מפצל "Board:"/"Commands:" לשני חלקים
+    script_runner.py                    # TextTestRunner + PrintBoard
+  app.py                                # KungFuChessApp — composition root
+tests/
+  unit/                                 # טסט לכל מודול, אחד-לאחד
+  integration/                          # קצה-לקצה דרך KungFuChessApp
 ```
 
-### למה בדיוק 5, ולמה בדיוק ככה חילקתי
-בסיבוב קודם חילקתי ליותר מדי מחלקות (גם `BoardTextParser` וגם `CommandParser`
-נפרדים, וגם `Piece` בקובץ נפרד, וגם `BoardTextPrinter` נפרד) — וזה סתר את
-העיקרון "גמישות מדודה, לא הגזמה" מהדרישות. אז איחדתי:
+## מיפוי ל-15 כללי הארכיטקטורה (הרלוונטיים לאיטרציה זו)
 
-- **`Piece` נכנס לתוך `piece_registry.py`** — הוא value object פסיבי בלי
-  התנהגות עצמאית משלו; הוא קיים רק כדי שה-registry ייצר וייפרש אותו.
-  אין הצדקה לקובץ/מחלקה נפרדים לזה.
-- **פיצול הטקסט לסקשנים וזיהוי הפקודות אוחדו ל-`InputParser` אחד** — שתי
-  אלה הן בעצם אותה אחריות ("להבין מה הטקסט של המשתמש אומר"), ותמיד
-  משתמשים בהן ביחד. הפרדה ביניהן הייתה יוצרת שני קבצים שתמיד נוסעים יחד
-  ואף פעם לא משתנים בנפרד.
-- **רינדור הלוח (`to_text`) עבר להיות מתודה על `Board` עצמו**, ולא מחלקת
-  `BoardTextPrinter` נפרדת — זו תצוגה חד-שורתית ונגזרת ישירות מהנתונים
-  ש-`Board` כבר מחזיק, לא אחריות נפרדת שמצדיקה מודול משלה.
+| כלל | איך מיושם |
+|---|---|
+| **1 — SRP** | כל קובץ = אחריות אחת: `Position` נתונים בלבד, `Board` אחסון בלבד, `BoardParser` המרת טקסט→Board בלבד, `ScriptParser` פיצול מבנה הסקריפט בלבד (לא יודע על notation), `TextTestRunner` תזמור בלבד |
+| **2 — Textual I/O** | `TextTestRunner` + `PrintBoard` — מאפשרים בדיקה מלאה בלי GUI |
+| **3 — Separation of Concerns** | Model (`model/`) לא מכיר I/O; I/O (`io/`) לא מכיר את מבנה הסקריפט; אף אחד לא מכיר רינדור/פיקסלים |
+| **9 — זמן דטרמיניסטי** | לא רלוונטי עדיין (אין תנועה/זמן באיטרציה זו) — יגיע ב-`RealTimeArbiter` בהמשך |
+| **13 — Robust Error Handling** | `test_board_parser.py`: reject illegal token, reject inconsistent row length; `test_script_runner.py`: ERROR codes מודפסים נכון |
+| **15 — Refactoring / Code Smells** | `notation.py` משותף ל-parser+printer (DRY) — טבלת ה-token מוגדרת פעם אחת; כל קובץ קטן וממוקד |
 
-מה **נשאר** נפרד, ולמה זה כן מוצדק:
-- `PieceRegistry` (מה חוקי ומה זה מייצג) ↔ `BoardValidator` (איך משתמשים
-  בזה כדי לבדוק לוח שלם, כולל רוחב שורות) — שתי שאלות שונות לגמרי, ומשתנות
-  בעצמאות זו מזו.
-- `InputParser` (צורת הטקסט) ↔ `BoardValidator` (תקינות סמנטית) — פרסור לא
-  אמור לדעת מה "חוקי", וולידציה לא אמורה לדעת איך פוצלו השורות.
-- `KongFuChessApp` — שכבת התיאום היחידה; בלעדיה כל מחלקה הייתה צריכה לדעת
-  על כל השאר.
+## דברים שנדחו בכוונה לאיטרציות הבאות (לפי ה-roadmap)
+- `BoardMapper`, `Controller` — Phase 3
+- `RookRule` (Strategy per piece) — Phase 4
+- `RuleEngine`, `GameEngine` — Phase 5
+- `RealTimeArbiter`, `Motion` — Phase 6
+- לכידות, ניצחון — Phase 7
+- הכתרה — Phase 8
+- שאר הכלים — Phase 9
+- קפיצה/Dodge, Drone, אנימציות, matchmaking — לפי `kung_fu_chess_requirements.md` §3-4, כשיגיע הזמן
 
-## איך זה עונה על ההנחיות
+זה בכוונה — Rule 12 (roadmap) אומר לא להוסיף כלים/מנגנונים לפני שהשלד יציב,
+ועקרון העיצוב במסמך הדרישות אומר לא לבנות אבסטרקציות ספקולטיביות למה
+שעוד לא נדרש בפועל.
 
-- **SRP** — כל אחת מ-5 המחלקות עושה דבר אחד ברור: registry רק יודע מה חוקי,
-  board רק מחזיק/מרנדר רשת, parser רק מפרש טקסט לשורות+פקודות, validator רק
-  בודק, app רק מתאם.
-- **DRY** — טוקני הכלים לא כתובים כרשימה קשיחה; הם נגזרים מ-`DEFAULT_COLORS`/
-  `DEFAULT_PIECE_TYPES`. הודעות השגיאה מוגדרות פעם אחת (כ-`error_code` על
-  החריגה) ולא משוכפלות בין הזיהוי להדפסה.
-- **ללא strings קשיחים בלוגיקה עסקית** — הפקודות המוכרות (`"print board"`)
-  יושבות בטבלת `KNOWN_COMMANDS`; טוקני כלים יושבים ב-`PieceRegistry`.
-- **Encapsulation** — `Board` שומר את הרשת הפנימית שלו כ-`_rows` פרטי,
-  ומחזיר רק עותקים הגנתיים דרך `get_row()`/`rows()`. שום קוד חיצוני לא נוגע
-  ברשימה הפנימית ישירות. `PieceRegistry` הוא היחיד שמכיר את מחרוזות הטוקן
-  בפועל.
-- **ללא monkey-patching בטסטים** — `KongFuChessApp.run()` מקבל את זרמי
-  הקלט/פלט כפרמטרים (dependency injection), כך שהטסטים משתמשים ב-`io.StringIO`
-  רגיל, בלי לגעת ב-`sys.stdin`/`sys.stdout`.
-- **100% test coverage** — `pytest --cov=kfc --cov-report=html`. דוח ה-HTML
-  נוצר בתיקיית `htmlcov/`.
+## פורמט הטקסט (Board Notation)
+תואם בדיוק למה שכבר אושר ב-VPL (הבדיקות שראינו עם "Expected output"):
+```
+Board:
+wK . . bK
+. . . .
+wR . . bR
+Commands:
+print board
+```
+- שורה נפרדת לכל row, תאים מופרדים ברווח
+- `.` = תא ריק
+- קידומת `w`/`b` + אות שחמט אחת: `K, Q, R, B, N, P`
+- שגיאות: `ERROR UNKNOWN_TOKEN`, `ERROR ROW_WIDTH_MISMATCH`
 
-## איך מריצים את הטסטים
+**שינוי מגרסה קודמת:** הוסרה התמיכה בקונבנציית ה-case החלופית (`Wk`
+לעומת `wK`) — היא לא מופיעה בשום מקום בספסיפיקציה הרשמית, והשארתה הייתה
+עלולה לגרום לקבלה שגויה של טוקנים שאמורים להידחות ב"reject illegal piece
+token".
+
+## איך מריצים
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
-# דוח כיסוי HTML: פותחים htmlcov/index.html בדפדפן
+# 51 טסטים, 100% coverage. דוח HTML: htmlcov/index.html
 ```
 
-## הכנה לדרישות עתידיות (בלי לממש אותן עכשיו)
-
-### 1. ייצוג בינארי של הלוח (במקום טקסטואלי)
-`Board` כבר לא חושף את מבנה האחסון שלו — שאר הקוד תמיד ניגש דרך
-`get_row()`/`rows()`/`width`/`height`/`to_text()`. כשיגיע הצורך, משנים רק
-את המימוש הפנימי של `Board` (למשל למערך בייטים/אינטים דחוס), בלי לגעת
-ב-parser, ב-validator או בשאר הקוד. `PieceRegistry.token_id()` כבר מכין את
-הבסיס לכך — לכל שילוב צבע/סוג יש כבר מזהה מספרי יציב וקטן, שיהיה נוח לארוז
-בביטים.
-
-### 2. משחקים מוגדרי-משתמש (כלים חדשים + כללי תנועה מותאמים אישית)
-שום מקום בקוד לא "יודע" איזה טוקנים חוקיים חוץ מ-`PieceRegistry` — שם
-מתבצעת ההרשמה של כל שילוב צבע/סוג. כדי לתמוך בכלים מותאמים אישית (כמו
-"רחפן" בסעיף 3.2), בעתיד `PieceRegistry` יוכל לטעון הגדרות כלים מקובץ
-קונפיגורציה חיצוני (JSON) של המשתמש וקוראים ל-`register()` עבור כל אחד —
-שום שינוי לא יידרש ב-parser/validator/board. באותה רוח, ברגע שתתווסף
-לוגיקת-תנועה (לא קיימת עדיין באיטרציה זו), היא צריכה להיות מוגדרת כאובייקט
-"אסטרטגיה" נפרד לכל סוג כלי (Strategy pattern) ולא כ-`if/elif` מרכזי אחד —
-כך שמשתמש שמגדיר כלל תנועה חדש (למשל "חייל שמגיע לסוף הופך לכיוון") רק
-מוסיף אסטרטגיה חדשה, ולא נוגע במנוע הליבה.
-
-### 3. פקודות עתידיות
-`InputParser` מונע ע"י טבלת `KNOWN_COMMANDS` — הוספת פקודה חדשה בעתיד היא
-שורה אחת בטבלה, ללא צורך לגעת בשאר הקוד.
-
 ## לגבי ה-URL של ה-git repo
-נדרשה הערה בראש `main.py` עם URL של ה-repo לצורך ה-review. לא סופק לי
-repo בפועל, אז השארתי placeholder (`TODO`) בשורה הראשונה של `main.py` —
-נא למלא בפועל לפני ההגשה.
+כמו קודם — placeholder בשורה הראשונה של `main.py`, למלא לפני ההגשה.

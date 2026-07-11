@@ -1,12 +1,11 @@
-# Git repo (unit tests live under tests/, run with: pytest --cov=kfc): TODO - add your repo URL here
+# Git repo (unit tests live under tests/, run with: pytest --cov=kungfu_chess): TODO - add your repo URL here
 import sys
 
-from kfc.app import KongFuChessApp
+from kungfu_chess.app import KungFuChessApp
 
 
 def main() -> None:
-    app = KongFuChessApp()
-    app.run(sys.stdin, sys.stdout)
+    KungFuChessApp().run(sys.stdin, sys.stdout)
 
 
 if __name__ == "__main__":
