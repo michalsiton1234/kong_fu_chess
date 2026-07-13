@@ -1,213 +1,10 @@
-
-# """
-# TextTestRunner drives a full script (board text + commands) end-to-end
-# without any GUI (architecture Rule 2 — Textual I/O Simulation for Testing).
-
-# In Iteration 6:
-#   - Movement over time is added. Moves take 1000ms to arrive.
-#   - Commands like 'wait X' advance the internal simulation clock.
-#   - 'print board' applies completed moves before rendering the state.
-# """
-# from typing import Dict, Optional, List, TextIO
-
-# from ..io.board_parser import BoardParser
-# from ..io.board_printer import BoardPrinter
-# from ..io.board_mapper import BoardMapper
-# from ..io.exceptions import BoardTextError
-# from ..model.board import Board
-# from ..model.position import Position
-# from ..model.piece import Piece
-# from .script_parser import ScriptParser
-
-
-# class TextTestRunner:
-#     def __init__(
-#         self,
-#         script_parser: Optional[ScriptParser] = None,
-#         board_parser: Optional[BoardParser] = None,
-#         board_printer: Optional[BoardPrinter] = None,
-#         board_mapper: Optional[BoardMapper] = None,
-#     ):
-#         self._script_parser = script_parser or ScriptParser()
-#         self._board_parser = board_parser or BoardParser()
-#         self._board_printer = board_printer or BoardPrinter()
-#         self._board_mapper = board_mapper or BoardMapper()
-        
-#         # Track selection and time-based movement state
-#         self._selected_piece: Optional[Piece] = None
-#         self._current_time: int = 0
-#         self._pending_moves: List[tuple] = []  # List of (arrival_time, source, dest, piece)
-
-#     def run(self, input_stream: TextIO, output_stream: TextIO) -> None:
-#         raw_text = input_stream.read().strip()
-#         if not raw_text:
-#             return
-
-#         board_text, command_lines = self._script_parser.parse(raw_text)
-#         if not board_text:
-#             return
-
-#         try:
-#             board = self._board_parser.parse(board_text)
-#         except BoardTextError as error:
-#             print(error.error_code, file=output_stream)
-#             return
-
-#         # Reset states for each independent run execution
-#         self._selected_piece = None
-#         self._current_time = 0
-#         self._pending_moves = []
-
-#         # Execute commands sequentially
-#         for line in command_lines:
-#             normalized = line.strip()
-#             if not normalized:
-#                 continue
-
-#             if normalized == "print board":
-#                 # Apply any movements that have finished traveling up to this point in time
-#                 self._apply_completed_moves(board)
-#                 print(self._board_printer.render(board), file=output_stream)
-                
-#             elif normalized.startswith("click "):
-#                 self._handle_click_command(normalized, board)
-                
-#             elif normalized.startswith("wait "):
-#                 self._handle_wait_command(normalized)
-
-#     def _handle_wait_command(self, command_line: str) -> None:
-#         """Advances the internal simulation clock by the specified milliseconds."""
-#         parts = command_line.split()
-#         if len(parts) == 2:
-#             try:
-#                 ms = int(parts[1])
-#                 self._current_time += ms
-#             except ValueError:
-#                 pass
-
-#     def _apply_completed_moves(self, board: Board) -> None:
-#         """Physically updates the board cells for pieces whose travel time has elapsed."""
-#         remaining_moves = []
-#         for arrival_time, source, dest, piece in self._pending_moves:
-#             if self._current_time >= arrival_time:
-#                 # Ensure the piece hasn't been modified or moved unexpectedly, then execute
-#                 if board.piece_at(source) == piece:
-#                     board.move_piece(source, dest)
-#             else:
-#                 remaining_moves.append((arrival_time, source, dest, piece))
-#         self._pending_moves = remaining_moves
-
-#     def _is_path_clear(self, board: Board, source: Position, dest: Position) -> bool:
-#         """Checks if the straight or diagonal line between source and dest is unobstructed."""
-#         row_dir = 0
-#         if dest.row > source.row:
-#             row_dir = 1
-#         elif dest.row < source.row:
-#             row_dir = -1
-
-#         col_dir = 0
-#         if dest.col > source.col:
-#             col_dir = 1
-#         elif dest.col < source.col:
-#             col_dir = -1
-
-#         curr_row = source.row + row_dir
-#         curr_col = source.col + col_dir
-
-#         while (curr_row, curr_col) != (dest.row, dest.col):
-#             if board.piece_at(Position(row=curr_row, col=curr_col)) is not None:
-#                 return False
-#             curr_row += row_dir
-#             curr_col += col_dir
-
-#         return True
-
-#     def _is_legal_move(self, board: Board, piece: Piece, source: Position, dest: Position) -> bool:
-#         """Validates geographic path, blockages, captures, and pawn rules."""
-#         if source == dest:
-#             return False
-
-#         dest_piece = board.piece_at(dest)
-#         if dest_piece is not None and dest_piece.color == piece.color:
-#             return False
-
-#         delta_row = abs(dest.row - source.row)
-#         delta_col = abs(dest.col - source.col)
-
-#         is_geometric_legal = False
-
-#         if piece.kind == "king":
-#             is_geometric_legal = delta_row <= 1 and delta_col <= 1
-
-#         elif piece.kind == "rook":
-#             if delta_row == 0 or delta_col == 0:
-#                 is_geometric_legal = self._is_path_clear(board, source, dest)
-
-#         elif piece.kind == "bishop":
-#             if delta_row == delta_col:
-#                 is_geometric_legal = self._is_path_clear(board, source, dest)
-
-#         elif piece.kind == "queen":
-#             if (delta_row == 0 or delta_col == 0) or (delta_row == delta_col):
-#                 is_geometric_legal = self._is_path_clear(board, source, dest)
-
-#         elif piece.kind == "knight":
-#             is_geometric_legal = (delta_row == 2 and delta_col == 1) or (delta_row == 1 and delta_col == 2)
-
-#         elif piece.kind == "pawn":
-#             direction = -1 if piece.color == "white" else 1
-#             row_diff = dest.row - source.row
-#             col_diff = abs(dest.col - source.col)
-
-#             if col_diff == 0:
-#                 if row_diff == direction:
-#                     is_geometric_legal = (dest_piece is None)
-#             elif col_diff == 1:
-#                 if row_diff == direction:
-#                     is_geometric_legal = (dest_piece is not None and dest_piece.color != piece.color)
-
-#         return is_geometric_legal
-
-#     def _handle_click_command(self, command_line: str, board: Board) -> None:
-#         parts = command_line.split()
-#         if len(parts) != 3:
-#             return
-            
-#         try:
-#             x = int(parts[1])
-#             y = int(parts[2])
-#         except ValueError:
-#             return
-
-#         pos = self._board_mapper.to_position(board, x, y)
-#         if pos is None:
-#             return
-
-#         clicked_piece = board.piece_at(pos)
-
-#         if self._selected_piece is None:
-#             if clicked_piece is not None:
-#                 self._selected_piece = clicked_piece
-#         else:
-#             if clicked_piece is not None and clicked_piece.color == self._selected_piece.color:
-#                 self._selected_piece = clicked_piece
-#             else:
-#                 source_pos = self._selected_piece.cell
-                
-#                 if self._is_legal_move(board, self._selected_piece, source_pos, pos):
-#                     # Instead of an immediate move, queue the action to arrive 1000ms later
-#                     arrival_time = self._current_time + 1000
-#                     self._pending_moves.append((arrival_time, source_pos, pos, self._selected_piece))
-                    
-#                 self._selected_piece = None
 """
 TextTestRunner drives a full script (board text + commands) end-to-end
 without any GUI (architecture Rule 2 — Textual I/O Simulation for Testing).
 
-In Iteration 6:
-  - Movement over time is added. Moves take 1000ms to arrive.
-  - Commands like 'wait X' advance the internal simulation clock.
-  - 'print board' applies completed moves before rendering the state.
+In Iteration 7:
+  - Pieces cannot be redirected or reselected while they are moving.
+  - After arrival, pieces can move again immediately (no cooldown).
 """
 from typing import Dict, Optional, List, TextIO
 
@@ -266,7 +63,7 @@ class TextTestRunner:
                 continue
 
             if normalized == "print board":
-                # Apply any movements that have finished traveling up to this point in time
+                # Apply completed moves right before printing
                 self._apply_completed_moves(board)
                 print(self._board_printer.render(board), file=output_stream)
                 
@@ -297,6 +94,13 @@ class TextTestRunner:
             else:
                 remaining_moves.append((arrival_time, source, dest, piece))
         self._pending_moves = remaining_moves
+
+    def _is_piece_moving(self, source_pos: Position) -> bool:
+        """Returns True if a piece originating from this position is currently in transit."""
+        for arrival_time, src, dest, piece in self._pending_moves:
+            if src == source_pos:
+                return True
+        return False
 
     def _is_path_clear(self, board: Board, source: Position, dest: Position) -> bool:
         """Checks if the straight or diagonal line between source and dest is unobstructed."""
@@ -368,7 +172,6 @@ class TextTestRunner:
                     is_geometric_legal = (dest_piece is not None and dest_piece.color != piece.color)
 
         return is_geometric_legal
-
     def _handle_click_command(self, command_line: str, board: Board) -> None:
         parts = command_line.split()
         if len(parts) != 3:
@@ -384,29 +187,42 @@ class TextTestRunner:
         if pos is None:
             return
 
+        # Continuous execution: Apply completed moves first to support instant actions (No Cooldown)
+        self._apply_completed_moves(board)
+
         clicked_piece = board.piece_at(pos)
 
         if self._selected_piece is None:
             if clicked_piece is not None:
+                # Iteration 7: Ignore interaction if the clicked piece is currently in transit
+                if self._is_piece_moving(pos):
+                    return
                 self._selected_piece = clicked_piece
         else:
             if clicked_piece is not None and clicked_piece.color == self._selected_piece.color:
+                # Iteration 7: Ignore switching selection to a friendly piece that is moving
+                if self._is_piece_moving(pos):
+                    return
                 self._selected_piece = clicked_piece
             else:
                 source_pos = self._selected_piece.cell
                 
+                # Iteration 7: Ensure selected piece hasn't begun moving mid-selection sequence
+                if self._is_piece_moving(source_pos):
+                    self._selected_piece = None
+                    return
+                if self._pending_moves:
+                    self._selected_piece = None
+                    return
                 if self._is_legal_move(board, self._selected_piece, source_pos, pos):
-                    # חישוב מרחק הצעדים (מספר המשבצות שהכלי עובר)
+                    # Distance calculation for dynamic arrival time (from Iteration 6)
                     delta_row = abs(pos.row - source_pos.row)
                     delta_col = abs(pos.col - source_pos.col)
-                    
-                    # עבור צריח, רץ, מלכה, מלך ורגלי - המרחק במספר משבצות הוא המקסימום בין השניים
-                    # (עבור פרש המרחק הגיאומטרי הוא קבוע או מוגדר כ-1000ms, נשתמש ב-max לכלים הישרים)
                     distance = max(delta_row, delta_col)
-                    if self._selected_piece.kind == "knight":
-                        distance = 1  # או לפי הגדרת הפרויקט לפרש, לרוב מהלך אחד ב-L נחשב יחידת זמן אחת
                     
-                    # כל משבצת לוקחת 1000 מילישניות
+                    if self._selected_piece.kind == "knight":
+                        distance = 1
+                    
                     travel_time = distance * 1000
                     arrival_time = self._current_time + travel_time
                     
