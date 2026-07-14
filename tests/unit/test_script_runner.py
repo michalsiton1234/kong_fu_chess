@@ -318,3 +318,25 @@ def test_enemy_collision_priority():
     )
     # הלבן הגיע ראשון ל-(0,2). כשהשחור מנסה לעבור בדרך או להגיע, הלוגיקה מעבדת לפי סדר הזמנים
     assert "wR" in run(script)
+
+def test_game_over_stops_all_moves():
+    """טסט איטרציה 9: הכאת המלך מסיימת את המשחק ומקפיאה לחיצות עתידיות"""
+    script = (
+        "Board:\n"
+        ". bK . .\n"
+        ". . . .\n"
+        ". wR . .\n"
+        "Commands:\n"
+        "click 150 250\n" # בחירת הצריח הלבן wR ב-(1,2)
+        "click 150 50\n"  # הזזת הצריח למעלה ל-(1,0) כדי להכות את המלך bK (מרחק 2 שורות = 2000ms)
+        "wait 2000\n"     # המתן להכאה
+        "click 150 50\n"  # לחיצה עתידית לאחר Game Over - צריכה לקפוא ולהתעלם!
+        "click 250 50\n"
+        "print board\n"
+    )
+    expected = (
+        ". wR . .\n"
+        ". . . .\n"
+        ". . . ."
+    )
+    assert run(script).strip() == expected

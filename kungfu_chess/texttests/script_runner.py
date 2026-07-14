@@ -6,7 +6,6 @@
 # In Iteration 7 & 8:
 #   - Pieces cannot be redirected or reselected while they are moving.
 #   - After arrival, pieces can move again immediately (no cooldown).
-#   - Handles conflicts and real-time validation cleanly.
 # """
 # from typing import Dict, Optional, List, TextIO
 
@@ -65,7 +64,6 @@
 #                 continue
 
 #             if normalized == "print board":
-#                 # Apply completed moves right before printing
 #                 self._apply_completed_moves(board)
 #                 print(self._board_printer.render(board), file=output_stream)
                 
@@ -73,34 +71,32 @@
 #                 self._handle_click_command(normalized, board)
                 
 #             elif normalized.startswith("wait "):
-#                 self._handle_wait_command(normalized, board)
+#                 self._handle_wait_command(normalized)
 
-#     def _handle_wait_command(self, command_line: str, board: Board) -> None:
-#         """Advances the internal simulation clock step by step and updates moves."""
+#     def _handle_wait_command(self, command_line: str) -> None:
+#         """Advances the internal simulation clock by the specified milliseconds."""
 #         parts = command_line.split()
 #         if len(parts) == 2:
 #             try:
 #                 ms = int(parts[1])
-#                 target_time = self._current_time + ms
-#                 # קידום זמן דינמי כדי לפתור מהלכים ברגע המדויק שלהם
-#                 while self._current_time < target_time:
-#                     self._current_time += 1
-#                     self._apply_completed_moves(board)
+#                 self._current_time += ms
 #             except ValueError:
 #                 pass
 
 #     def _apply_completed_moves(self, board: Board) -> None:
 #         """Physically updates the board cells for pieces whose travel time has elapsed."""
+#         # מיון כרונולוגי של המהלכים לפי זמן הגעה לשמירה על עקביות באיטרציה 8
 #         self._pending_moves.sort(key=lambda x: x[0])
+        
 #         remaining_moves = []
 #         for arrival_time, source, dest, piece in self._pending_moves:
 #             if self._current_time >= arrival_time:
-#                 # וידוא שהכלי עדיין עומד במיקום המקור שלו לפני הזזה (מניעת כפילויות)
 #                 if board.piece_at(source) == piece:
-#                     # חוק איטרציה 8: ביטול מהלך אם כלי ידידותי חוסם את משבצת היעד ברגע האמת
+#                     # חוק איטרציה 8: נחיתה על כלי ידידותי ברגע ההגעה מבטלת את המהלך
 #                     target_piece = board.piece_at(dest)
 #                     if target_piece is not None and target_piece.color == piece.color:
 #                         continue
+                    
 #                     board.move_piece(source, dest)
 #             else:
 #                 remaining_moves.append((arrival_time, source, dest, piece))
@@ -140,6 +136,10 @@
 #         if source == dest:
 #             return False
 
+#         dest_piece = board.piece_at(dest)
+#         if dest_piece is not None and dest_piece.color == piece.color:
+#             return False
+
 #         delta_row = abs(dest.row - source.row)
 #         delta_col = abs(dest.col - source.col)
 
@@ -170,10 +170,9 @@
 
 #             if col_diff == 0:
 #                 if row_diff == direction:
-#                     is_geometric_legal = True
+#                     is_geometric_legal = (dest_piece is None)
 #             elif col_diff == 1:
 #                 if row_diff == direction:
-#                     dest_piece = board.piece_at(dest)
 #                     is_geometric_legal = (dest_piece is not None and dest_piece.color != piece.color)
 
 #         return is_geometric_legal
@@ -193,6 +192,7 @@
 #         if pos is None:
 #             return
 
+#         # החלת מהלכים שהסתיימו טרם הלחיצה הנוכחית
 #         self._apply_completed_moves(board)
 #         clicked_piece = board.piece_at(pos)
 
@@ -213,11 +213,14 @@
 #                     self._selected_piece = None
 #                     return
 
+#                 # בדיקת חוקיות מקורית לחלוטין
 #                 is_basic_valid = self._is_legal_move(board, self._selected_piece, source_pos, pos)
                 
-#                 # עוקף חוקיות לאיטרציה 8: מאפשר הזמנת מהלך אם המשבצת תפוסה כרגע ע"י כלי ידידותי
+#                 # איטרציה 8: תמיכה ב-Premove על משבצת שכרגע מאוכלסת ע"י כלי ידידותי (שעשוי לזוז משם)
 #                 if not is_basic_valid and clicked_piece is not None and clicked_piece.color == self._selected_piece.color:
-#                     is_basic_valid = True 
+#                     # בודקים חוקיות גאומטרית טהורה ללא חסימת הכלי הידידותי הספציפי ביעד
+#                     # אנו מאפשרים זאת זמנית; אם הכלי הידידותי לא יפנה את המשבצת בזמן, המהלך יבוטל ב-_apply_completed_moves
+#                     is_basic_valid = True
 
 #                 if is_basic_valid:
 #                     delta_row = abs(pos.row - source_pos.row)
@@ -243,9 +246,9 @@
 TextTestRunner drives a full script (board text + commands) end-to-end
 without any GUI (architecture Rule 2 — Textual I/O Simulation for Testing).
 
-In Iteration 7 & 8:
-  - Pieces cannot be redirected or reselected while they are moving.
-  - After arrival, pieces can move again immediately (no cooldown).
+In Iteration 9:
+  - Capturing the enemy king ends the game (Game Over).
+  - After game over, later move commands/clicks are ignored.
 """
 from typing import Dict, Optional, List, TextIO
 
@@ -276,6 +279,7 @@ class TextTestRunner:
         self._selected_piece: Optional[Piece] = None
         self._current_time: int = 0
         self._pending_moves: List[tuple] = []  # List of (arrival_time, source, dest, piece)
+        self._game_over: bool = False          # איטרציה 9: משתנה מצב לסיום המשחק
 
     def run(self, input_stream: TextIO, output_stream: TextIO) -> None:
         raw_text = input_stream.read().strip()
@@ -296,6 +300,7 @@ class TextTestRunner:
         self._selected_piece = None
         self._current_time = 0
         self._pending_moves = []
+        self._game_over = False                 # איטרציה 9: איפוס בתחילת ריצה
 
         # Execute commands sequentially
         for line in command_lines:
@@ -311,31 +316,41 @@ class TextTestRunner:
                 self._handle_click_command(normalized, board)
                 
             elif normalized.startswith("wait "):
-                self._handle_wait_command(normalized)
+                self._handle_wait_command(normalized, board)
 
-    def _handle_wait_command(self, command_line: str) -> None:
-        """Advances the internal simulation clock by the specified milliseconds."""
+    def _handle_wait_command(self, command_line: str, board: Board) -> None:
+        """Advances the internal simulation clock. Processes pending moves chronologically."""
         parts = command_line.split()
         if len(parts) == 2:
             try:
                 ms = int(parts[1])
+                # אם המשחק כבר נגמר, הזמן עדיין יכול להתקדם, אך מהלכים לא יירשמו
                 self._current_time += ms
+                self._apply_completed_moves(board)
             except ValueError:
                 pass
 
     def _apply_completed_moves(self, board: Board) -> None:
         """Physically updates the board cells for pieces whose travel time has elapsed."""
-        # מיון כרונולוגי של המהלכים לפי זמן הגעה לשמירה על עקביות באיטרציה 8
         self._pending_moves.sort(key=lambda x: x[0])
         
         remaining_moves = []
         for arrival_time, source, dest, piece in self._pending_moves:
             if self._current_time >= arrival_time:
+                # אם המשחק כבר נגמר בצעד קודם, מתעלמים מכל שאר המהלכים בתור
+                if self._game_over:
+                    continue
+                    
                 if board.piece_at(source) == piece:
-                    # חוק איטרציה 8: נחיתה על כלי ידידותי ברגע ההגעה מבטלת את המהלך
                     target_piece = board.piece_at(dest)
+                    
+                    # חוק איטרציה 8: נחיתה על כלי ידידותי ברגע ההגעה מבוטלת
                     if target_piece is not None and target_piece.color == piece.color:
                         continue
+                    
+                    # איטרציה 9: אם הכלי המוכר הוא מלך, המשחק מסתיים
+                    if target_piece is not None and target_piece.kind == "king":
+                        self._game_over = True
                     
                     board.move_piece(source, dest)
             else:
@@ -418,6 +433,10 @@ class TextTestRunner:
         return is_geometric_legal
 
     def _handle_click_command(self, command_line: str, board: Board) -> None:
+        # איטרציה 9: אם המשחק נגמר, מתעלמים לחלוטין מכל לחיצה חדשה
+        if self._game_over:
+            return
+
         parts = command_line.split()
         if len(parts) != 3:
             return
@@ -432,8 +451,12 @@ class TextTestRunner:
         if pos is None:
             return
 
-        # החלת מהלכים שהסתיימו טרם הלחיצה הנוכחית
         self._apply_completed_moves(board)
+        
+        # בדיקה נוספת למקרה שהחלת המהלכים האחרונה סיימה את המשחק ברגע זה
+        if self._game_over:
+            return
+            
         clicked_piece = board.piece_at(pos)
 
         if self._selected_piece is None:
@@ -453,13 +476,9 @@ class TextTestRunner:
                     self._selected_piece = None
                     return
 
-                # בדיקת חוקיות מקורית לחלוטין
                 is_basic_valid = self._is_legal_move(board, self._selected_piece, source_pos, pos)
                 
-                # איטרציה 8: תמיכה ב-Premove על משבצת שכרגע מאוכלסת ע"י כלי ידידותי (שעשוי לזוז משם)
                 if not is_basic_valid and clicked_piece is not None and clicked_piece.color == self._selected_piece.color:
-                    # בודקים חוקיות גאומטרית טהורה ללא חסימת הכלי הידידותי הספציפי ביעד
-                    # אנו מאפשרים זאת זמנית; אם הכלי הידידותי לא יפנה את המשבצת בזמן, המהלך יבוטל ב-_apply_completed_moves
                     is_basic_valid = True
 
                 if is_basic_valid:
@@ -473,7 +492,6 @@ class TextTestRunner:
                     travel_time = distance * 1000
                     arrival_time = self._current_time + travel_time
 
-                    # מניעת כפל מהלכים לאותו היעד באותו הזמן
                     conflict = any(p_dest == pos for (_, _, p_dest, _) in self._pending_moves)
                     if conflict:
                         self._selected_piece = None
