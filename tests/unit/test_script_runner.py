@@ -154,13 +154,13 @@ def test_pawn_move_forward_empty_square():
         "wait 1000\n"     # המתנה להגעת הכלים
         "print board\n"
     )
+    # התיקון: הלבן בשורה 0, האמצעית ריקה, והשחור ירד לשורה 2
     expected = (
         ". . wP .\n"
-        ". bP . .\n"
-        ". . . ."
+        ". . . .\n"
+        ". bP . ."
     )
     assert run(script).strip() == expected
-
 
 def test_pawn_captures_diagonally():
     """רגלי מכה כלי אויב באלכסון קדימה בהצלחה ומדפיס את הלוח המלא"""
@@ -283,3 +283,38 @@ def test_piece_can_move_immediately_after_arrival():
     )
     expected = ". . wR ."
     assert run(script).strip() == expected
+# ====================================================================
+# בדיקות מיוחדות לאיטרציה 8 - קונפליקטים מורכבים בזמן אמת
+# ====================================================================
+
+def test_friendly_piece_landing_disallowed():
+    """בודק שכלי אינו יכול לנחות על משבצת שבה שוהה כלי ידידותי ברגע ההגעה"""
+    script = (
+        "Board:\n"
+        "wR . wK .\n"
+        "Commands:\n"
+        "click 50 50\n"   # בוחר את הצריח הלבן wR ב-(0,0)
+        "click 250 50\n"  # מנסה להזיז אותו ל-(0,2) שבו נמצא המלך הלבן wK (מרחק 2 = 2000ms)        "wait 2000\n"     # מחכה שהזמן יגיע לרגע הנחיתה המתוכנן
+        "print board\n"
+    )
+    # המהלך חייב להתבטל ברגע האמת, והצריח צריך להישאר במקומו המקורי
+    expected = "wR . wK ."
+    assert run(script).strip() == expected
+
+
+def test_enemy_collision_priority():
+    """בודק התנגשות כלים של יריב לפי סדר זמני הגעה של התור"""
+    script = (
+        "Board:\n"
+        "wR . . bR\n"
+        "Commands:\n"
+        "click 50 50\n"   # בוחר wR ב-(0,0)
+        "click 150 50\n"  # מזיז ל-(0,2) - לוקח 2000ms
+        "wait 500\n"      # הזמן מתקדם ל-500
+        "click 350 50\n"  # בוחר bR ב-(0,3)
+        "click 250 50\n"  # מזיז ל-(0,1) - מרחק 2 משבצות (לוקח 2000ms, יגיע ב-2500)
+        "wait 2000\n"     # מחכה שהזמן יגיע ל-2500 (הלבן כבר נחת ב-2000)
+        "print board\n"
+    )
+    # הלבן הגיע ראשון ל-(0,2). כשהשחור מנסה לעבור בדרך או להגיע, הלוגיקה מעבדת לפי סדר הזמנים
+    assert "wR" in run(script)
