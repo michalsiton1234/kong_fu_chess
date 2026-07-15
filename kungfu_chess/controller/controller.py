@@ -56,6 +56,25 @@ class Controller:
 
         self._attempt_move(board, position, clicked_piece)
 
+    def handle_jump(self, board: Board, x: int, y: int) -> None:
+        if self._game_engine.game_over:
+            return
+
+        position = self._board_mapper.to_position(board, x, y)
+        if position is None:
+            return
+
+        self._game_engine.apply_pending_moves(board)
+        if self._game_engine.game_over:
+            return
+
+        piece = board.piece_at(position)
+        if piece is None:
+            return
+
+        self._game_engine.request_jump(board, piece, position)
+        self._selected_piece = None
+
     def _select_piece(
         self,
         board: Board,
@@ -65,6 +84,8 @@ class Controller:
         if clicked_piece is None:
             return
         if self._game_engine.arbiter.is_piece_moving(position):
+            return
+        if self._game_engine.arbiter.is_piece_airborne(clicked_piece):
             return
         self._selected_piece = clicked_piece
 
@@ -76,6 +97,8 @@ class Controller:
     ) -> None:
         if self._game_engine.arbiter.is_piece_moving(position):
             return
+        if self._game_engine.arbiter.is_piece_airborne(clicked_piece):
+            return
         self._selected_piece = clicked_piece
 
     def _attempt_move(
@@ -86,6 +109,9 @@ class Controller:
     ) -> None:
         source = self._selected_piece.cell
         if self._game_engine.arbiter.is_piece_moving(source):
+            self._selected_piece = None
+            return
+        if self._game_engine.arbiter.is_piece_airborne(self._selected_piece):
             self._selected_piece = None
             return
 

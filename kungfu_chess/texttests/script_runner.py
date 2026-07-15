@@ -61,6 +61,8 @@ class TextTestRunner:
                 print_board.execute(board)
             elif normalized.startswith("click "):
                 self._handle_click_command(normalized, board)
+            elif normalized.startswith("jump "):
+                self._handle_jump_command(normalized, board)
             elif normalized.startswith("wait "):
                 self._handle_wait_command(normalized, board)
 
@@ -88,3 +90,14 @@ class TextTestRunner:
         except ValueError:
             return
         self._controller.handle_click(board, x, y)
+
+    def _handle_jump_command(self, command_line: str, board: Board) -> None:
+        parts = command_line.split()
+        if len(parts) != 3:
+            return
+        try:
+            x = int(parts[1])
+            y = int(parts[2])
+        except ValueError:
+            return
+        self._controller.handle_jump(board, x, y)

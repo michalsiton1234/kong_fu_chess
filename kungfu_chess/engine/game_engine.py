@@ -10,6 +10,7 @@ from ..model.board import Board
 from ..model.piece import KNIGHT, Piece
 from ..model.position import Position
 from ..rules.rule_engine import RuleEngine
+from .jump import JUMP_DURATION_MS, Jump
 from .motion import Motion
 from .real_time_arbiter import RealTimeArbiter
 
@@ -73,6 +74,9 @@ class GameEngine:
         if self._arbiter.is_piece_moving(source):
             return False
 
+        if self._arbiter.is_piece_airborne(piece):
+            return False
+
         is_valid = self._rule_engine.validate_move(
             board, piece, source, destination
         )
@@ -90,6 +94,38 @@ class GameEngine:
                 source=source,
                 destination=destination,
                 piece=piece,
+            )
+        )
+        return True
+
+    def request_jump(
+        self,
+        board: Board,
+        piece: Piece,
+        cell: Position,
+    ) -> bool:
+        if self._game_over:
+            return False
+
+        if board.piece_at(cell) != piece:
+            return False
+
+        if self._arbiter.is_piece_moving(cell):
+            return False
+
+        if self._arbiter.is_piece_in_motion(piece):
+            return False
+
+        if self._arbiter.is_piece_airborne(piece):
+            return False
+
+        start_time = self._arbiter.current_time
+        self._arbiter.schedule_jump(
+            Jump(
+                start_time=start_time,
+                land_time=start_time + JUMP_DURATION_MS,
+                piece=piece,
+                cell=cell,
             )
         )
         return True

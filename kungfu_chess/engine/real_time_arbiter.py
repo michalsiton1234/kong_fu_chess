@@ -11,6 +11,7 @@ from ..model.board import Board
 from ..model.piece import KING, Piece
 from ..model.position import Position
 from ..rules.promotion_service import PromotionService
+from .jump import Jump
 from .motion import Motion
 
 
@@ -20,6 +21,7 @@ class RealTimeArbiter:
     ) -> None:
         self._current_time: int = 0
         self._pending_motions: List[Motion] = []
+        self._pending_jumps: List[Jump] = []
         self._promotion_service = promotion_service or PromotionService()
 
     @property
@@ -29,6 +31,7 @@ class RealTimeArbiter:
     def reset(self) -> None:
         self._current_time = 0
         self._pending_motions = []
+        self._pending_jumps = []
 
     def advance_time(self, milliseconds: int) -> None:
         self._current_time += milliseconds
@@ -36,9 +39,21 @@ class RealTimeArbiter:
     def schedule(self, motion: Motion) -> None:
         self._pending_motions.append(motion)
 
+    def schedule_jump(self, jump: Jump) -> None:
+        self._pending_jumps.append(jump)
+
     def is_piece_moving(self, source: Position) -> bool:
         return any(
             motion.source == source for motion in self._pending_motions
+        )
+
+    def is_piece_in_motion(self, piece: Piece) -> bool:
+        return any(motion.piece is piece for motion in self._pending_motions)
+
+    def is_piece_airborne(self, piece: Piece) -> bool:
+        return any(
+            jump.piece is piece and self._current_time < jump.land_time
+            for jump in self._pending_jumps
         )
 
     def has_destination_conflict(self, destination: Position) -> bool:
@@ -64,6 +79,11 @@ class RealTimeArbiter:
             if is_game_over():
                 continue
 
+            if self._try_airborne_counter_capture(
+                board, motion, is_game_over, mark_game_over
+            ):
+                continue
+
             if board.piece_at(motion.source) != motion.piece:
                 continue
 
@@ -81,3 +101,40 @@ class RealTimeArbiter:
             self._promotion_service.apply_if_needed(motion.piece, board)
 
         self._pending_motions = remaining
+        self._pending_jumps = [
+            jump
+            for jump in self._pending_jumps
+            if jump.land_time > self._current_time
+        ]
+
+    def _active_jump_at(
+        self, cell: Position, event_time: int
+    ) -> Optional[Jump]:
+        for jump in self._pending_jumps:
+            if jump.cell != cell:
+                continue
+            if jump.start_time <= event_time <= jump.land_time:
+                return jump
+        return None
+
+    def _try_airborne_counter_capture(
+        self,
+        board: Board,
+        motion: Motion,
+        is_game_over: Callable[[], bool],
+        mark_game_over: Callable[[], None],
+    ) -> bool:
+        jump = self._active_jump_at(motion.destination, motion.arrival_time)
+        if jump is None:
+            return False
+        if motion.piece.color == jump.piece.color:
+            return False
+
+        if board.piece_at(motion.source) != motion.piece:
+            return False
+
+        if motion.piece.kind == KING:
+            mark_game_over()
+
+        board.remove_piece(motion.source)
+        return True
