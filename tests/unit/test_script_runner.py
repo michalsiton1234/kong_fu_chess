@@ -325,62 +325,51 @@ def test_enemy_collision_priority():
 # ====================================================================
 
 def test_pawn_double_move_from_start_row():
-    """רגלי לבן זז שני צעדים משורת ההתחלה (שורה תחתונה) — כמו Ultracode"""
+    """רגלי לבן — מהלך כפול משורת התחלה (לוח 5 שורות, כמו Ultracode)"""
     script = (
         "Board:\n"
         ". . .\n"
         ". . .\n"
         ". . .\n"
         ". wP .\n"
+        ". . .\n"
         "Commands:\n"
-        "click 150 350\n"   # wP ב-(3, 1)
-        "click 150 150\n"   # יעד (1, 1)
+        "click 150 350\n"
+        "click 150 150\n"
         "wait 2000\n"
         "print board\n"
     )
-    assert run(script).strip() == ". . .\n. wP .\n. . .\n. . ."
+    assert run(script).strip() == (
+        ". . .\n. wP .\n. . .\n. . .\n. . ."
+    )
 
 
 def test_black_pawn_double_move_from_start_row():
-    """רגלי שחור זז שני צעדים משורת ההתחלה (שורה עליונה) — כמו Ultracode"""
+    """רגלי שחור — מהלך כפול משורת התחלה (לוח 5 שורות, כמו Ultracode)"""
     script = (
         "Board:\n"
+        ". . .\n"
         ". bP .\n"
         ". . .\n"
         ". . .\n"
         ". . .\n"
         "Commands:\n"
-        "click 150 50\n"    # bP ב-(0, 1)
-        "click 150 250\n"   # יעד (2, 1)
+        "click 150 150\n"
+        "click 150 350\n"
         "wait 2000\n"
         "print board\n"
     )
-    assert run(script).strip() == ". . .\n. . .\n. bP .\n. . ."
+    assert run(script).strip() == (
+        ". . .\n. . .\n. . .\n. bP .\n. . ."
+    )
 
 
 def test_pawn_double_move_from_non_start_row_invalid():
-    """מהלך כפול לא חוקי כשהרגלי כבר לא בשורת ההתחלה"""
+    """מהלך כפול לא חוקי — רגלי בלוח 4 שורות, לא בשורת התחלה"""
     script = (
         "Board:\n"
         ". . .\n"
         ". . .\n"
-        ". wP .\n"
-        ". . .\n"
-        "Commands:\n"
-        "click 150 250\n"
-        "click 150 50\n"
-        "wait 2000\n"
-        "print board\n"
-    )
-    assert run(script).strip() == ". . .\n. . .\n. wP .\n. . ."
-
-
-def test_pawn_double_move_blocked_when_path_not_clear():
-    """מהלך כפול נדחה כשמשבצת הביניים תפוסה"""
-    script = (
-        "Board:\n"
-        ". . .\n"
-        ". wR .\n"
         ". . .\n"
         ". wP .\n"
         "Commands:\n"
@@ -389,7 +378,27 @@ def test_pawn_double_move_blocked_when_path_not_clear():
         "wait 2000\n"
         "print board\n"
     )
-    assert run(script).strip() == ". . .\n. wR .\n. . .\n. wP ."
+    assert run(script).strip() == ". . .\n. . .\n. . .\n. wP ."
+
+
+def test_pawn_double_move_blocked_when_path_not_clear():
+    """מהלך כפול נדחה כשמשבצת הביניים תפוסה"""
+    script = (
+        "Board:\n"
+        ". . .\n"
+        ". . .\n"
+        ". wR .\n"
+        ". wP .\n"
+        ". . .\n"
+        "Commands:\n"
+        "click 150 350\n"
+        "click 150 150\n"
+        "wait 2000\n"
+        "print board\n"
+    )
+    assert run(script).strip() == (
+        ". . .\n. . .\n. wR .\n. wP .\n. . ."
+    )
 
 
 def test_pawn_promotes_to_queen_on_last_row():

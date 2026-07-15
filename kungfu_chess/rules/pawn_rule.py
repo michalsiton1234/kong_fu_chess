@@ -37,7 +37,7 @@ class PawnRule(PieceRule):
 
     @staticmethod
     def _start_row(piece: Piece, board_height: int) -> int:
-        # White starts on the bottom row; black starts on the top row.
+        # Standard pawn ranks: white on height-2, black on row 1.
         if piece.color == WHITE:
-            return board_height - 1
-        return 0
+            return board_height - 2
+        return 1
