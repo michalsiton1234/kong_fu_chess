@@ -156,9 +156,9 @@ def test_pawn_move_forward_empty_square():
     )
     # התיקון: הלבן בשורה 0, האמצעית ריקה, והשחור ירד לשורה 2
     expected = (
-        ". . wP .\n"
+        ". . wQ .\n"
         ". . . .\n"
-        ". bP . ."
+        ". bQ . ."
     )
     assert run(script).strip() == expected
 
@@ -175,7 +175,7 @@ def test_pawn_captures_diagonally():
         "print board\n"
     )
     expected = (
-        ". wP . .\n"
+        ". wQ . .\n"
         ". . . ."
     )
     assert run(script).strip() == expected
@@ -193,7 +193,7 @@ def test_pawn_always_returns_true_geometry():
         "wait 1000\n"     # המתנה להגעת הכלי
         "print board\n"
     )
-    assert "wP" in run(script).split('\n')[0]
+    assert "wQ" in run(script).split('\n')[0]
 
 
 # ====================================================================
@@ -225,8 +225,8 @@ def test_pawn_move_delayed_by_time():
     # הדפסה 2 (זמן 500) - הכלי עדיין למטה בשורה הרביעית (אינדקס 3)
     assert "wP" in lines[3]
     
-    # הדפסה 3 (זמן 1000) - הכלי הגיע למעלה לשורה החמישית (אינדקס 4)
-    assert "wP" in lines[4]
+    # הדפסה 3 (זמן 1000) - הכלי הגיע למעלה והוכתר למלכה
+    assert "wQ" in lines[4]
 
 
 def test_script_runner_invalid_wait_and_clicks():
@@ -319,24 +319,57 @@ def test_enemy_collision_priority():
     # הלבן הגיע ראשון ל-(0,2). כשהשחור מנסה לעבור בדרך או להגיע, הלוגיקה מעבדת לפי סדר הזמנים
     assert "wR" in run(script)
 
-def test_game_over_stops_all_moves():
-    """טסט איטרציה 9: הכאת המלך מסיימת את המשחק ומקפיאה לחיצות עתידיות"""
+
+# ====================================================================
+# בדיקות איטרציה 10 — רגלי: מהלך כפול, נתיב פנוי, הכתרה
+# ====================================================================
+
+def test_pawn_double_move_from_start_row():
+    """רגלי יכול לזוז שתי משבצות קדימה משורת ההתחלה כשהנתיב פנוי"""
     script = (
         "Board:\n"
-        ". bK . .\n"
         ". . . .\n"
-        ". wR . .\n"
+        ". . . .\n"
+        ". . wP .\n"
+        ". . . .\n"
         "Commands:\n"
-        "click 150 250\n" # בחירת הצריח הלבן wR ב-(1,2)
-        "click 150 50\n"  # הזזת הצריח למעלה ל-(1,0) כדי להכות את המלך bK (מרחק 2 שורות = 2000ms)
-        "wait 2000\n"     # המתן להכאה
-        "click 150 50\n"  # לחיצה עתידית לאחר Game Over - צריכה לקפוא ולהתעלם!
-        "click 250 50\n"
+        "click 250 250\n"   # wP ב-(2, 2)
+        "click 250 50\n"    # יעד (0, 2) — שני צעדים
+        "wait 2000\n"
         "print board\n"
     )
-    expected = (
-        ". wR . .\n"
+    assert run(script).strip().split("\n")[0] == ". . wQ ."
+
+
+def test_pawn_double_move_blocked_when_path_not_clear():
+    """מהלך כפול נדחה כשמשבצת הביניים תפוסה"""
+    script = (
+        "Board:\n"
         ". . . .\n"
-        ". . . ."
+        ". . wR .\n"
+        ". . wP .\n"
+        ". . . .\n"
+        "Commands:\n"
+        "click 250 250\n"
+        "click 250 50\n"
+        "wait 2000\n"
+        "print board\n"
     )
-    assert run(script).strip() == expected
+    assert run(script).strip().split("\n")[2] == ". . wP ."
+
+
+def test_pawn_promotes_to_queen_on_last_row():
+    """רגלי שמגיע לשורה האחרונה הופך למלכה"""
+    script = (
+        "Board:\n"
+        ". . .\n"
+        "wP . .\n"
+        ". . .\n"
+        "Commands:\n"
+        "click 50 150\n"
+        "click 50 50\n"
+        "wait 1000\n"
+        "print board\n"
+    )
+    assert run(script).strip() == "wQ . .\n. . .\n. . ."
+
