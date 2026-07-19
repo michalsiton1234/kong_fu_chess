@@ -4,12 +4,13 @@ GameEngine is the application-service gateway for all game actions (Rule 8).
 It separates validation from action (Rule 5) by consulting RuleEngine and
 delegating time-based execution to RealTimeArbiter.
 """
-from typing import Optional
+from typing import Optional, Type
 
 from ..model.board import Board
 from ..model.piece import KNIGHT, Piece
 from ..model.position import Position
 from ..rules.rule_engine import RuleEngine
+from .event_bus import SynchronousEventBus
 from .game_events import GameObserver
 from .jump import JUMP_DURATION_MS, Jump
 from .motion import Motion
@@ -21,10 +22,16 @@ class GameEngine:
         self,
         rule_engine: Optional[RuleEngine] = None,
         arbiter: Optional[RealTimeArbiter] = None,
+        event_bus: Optional[SynchronousEventBus] = None,
     ):
+        self._event_bus = event_bus or SynchronousEventBus()
         self._rule_engine = rule_engine or RuleEngine()
-        self._arbiter = arbiter or RealTimeArbiter()
+        self._arbiter = arbiter or RealTimeArbiter(event_bus=self._event_bus)
         self._game_over = False
+
+    @property
+    def event_bus(self) -> SynchronousEventBus:
+        return self._event_bus
 
     @property
     def arbiter(self) -> RealTimeArbiter:
@@ -36,6 +43,12 @@ class GameEngine:
 
     def add_observer(self, observer: GameObserver) -> None:
         self._arbiter.add_observer(observer)
+
+    def subscribe(self, event_type: Type, subscriber) -> None:
+        self._event_bus.subscribe(event_type, subscriber)
+
+    def unsubscribe(self, event_type: Type, subscriber) -> None:
+        self._event_bus.unsubscribe(event_type, subscriber)
 
     def reset(self) -> None:
         self._game_over = False

@@ -11,6 +11,7 @@ from ..model.board import Board
 from ..model.piece import KING, PAWN, QUEEN, Piece
 from ..model.position import Position
 from ..rules.promotion_service import PromotionService
+from .event_bus import SynchronousEventBus
 from .game_events import CounterCaptureEvent, GameObserver, MoveCompletedEvent
 from .jump import Jump
 from .motion import Motion
@@ -22,6 +23,7 @@ class RealTimeArbiter:
         self,
         promotion_service: Optional[PromotionService] = None,
         observers: Optional[List[GameObserver]] = None,
+        event_bus: Optional[SynchronousEventBus] = None,
     ) -> None:
         self._current_time: int = 0
         self._pending_motions: List[Motion] = []
@@ -29,6 +31,7 @@ class RealTimeArbiter:
         self._rest_until_by_piece_id: Dict[str, int] = {}
         self._promotion_service = promotion_service or PromotionService()
         self._observers: List[GameObserver] = list(observers or [])
+        self._event_bus = event_bus
 
     def add_observer(self, observer: GameObserver) -> None:
         self._observers.append(observer)
@@ -201,7 +204,11 @@ class RealTimeArbiter:
     def _notify_move_completed(self, event: MoveCompletedEvent) -> None:
         for observer in self._observers:
             observer.on_move_completed(event)
+        if self._event_bus is not None:
+            self._event_bus.publish(event)
 
     def _notify_counter_capture(self, event: CounterCaptureEvent) -> None:
         for observer in self._observers:
             observer.on_counter_capture(event)
+        if self._event_bus is not None:
+            self._event_bus.publish(event)
