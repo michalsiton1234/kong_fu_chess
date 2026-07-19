@@ -10,6 +10,7 @@ from ..model.board import Board
 from ..model.piece import KNIGHT, Piece
 from ..model.position import Position
 from ..rules.rule_engine import RuleEngine
+from .game_events import GameObserver
 from .jump import JUMP_DURATION_MS, Jump
 from .motion import Motion
 from .real_time_arbiter import RealTimeArbiter
@@ -32,6 +33,9 @@ class GameEngine:
     @property
     def game_over(self) -> bool:
         return self._game_over
+
+    def add_observer(self, observer: GameObserver) -> None:
+        self._arbiter.add_observer(observer)
 
     def reset(self) -> None:
         self._game_over = False
@@ -77,6 +81,9 @@ class GameEngine:
         if self._arbiter.is_piece_airborne(piece):
             return False
 
+        if self._arbiter.is_piece_resting(piece):
+            return False
+
         is_valid = self._rule_engine.validate_move(
             board, piece, source, destination
         )
@@ -117,6 +124,9 @@ class GameEngine:
             return False
 
         if self._arbiter.is_piece_airborne(piece):
+            return False
+
+        if self._arbiter.is_piece_resting(piece):
             return False
 
         start_time = self._arbiter.current_time

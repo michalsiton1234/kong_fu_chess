@@ -267,21 +267,26 @@ def test_piece_cannot_be_redirected_while_moving():
     assert run(script).strip() == expected
 
 
-def test_piece_can_move_immediately_after_arrival():
-    """בודק שכלי שהגיע ליעדו יכול לזוז שוב מיד ללא cooldown"""
+def test_piece_can_move_again_after_rest_period():
+    """בודק שכלי חייב לנוח אחרי הגעה לפני מהלך נוסף"""
     script = (
         "Board:\n"
         "wR . . .\n"
         "Commands:\n"
-        "click 50 50\n"   # בוחר wR ב-(0,0)
-        "click 150 50\n"  # מזיז ל-(0,1) - לוקח 1000ms
-        "wait 1000\n"     # מחכה שיגיע (הזמן עכשיו 1000 והכלי נחת פיזית בלוח)
-        "click 150 50\n"  # בוחר אותו מיד ממיקומו החדש ב-(0,1) - חוקי! (No Cooldown)
-        "click 250 50\n"  # מזיז ל-(0,2) - לוקח עוד 1000ms
-        "wait 1000\n"     # מחכה שיגיע
+        "click 50 50\n"
+        "click 150 50\n"
+        "wait 1000\n"
+        "click 150 50\n"
+        "click 250 50\n"
+        "wait 500\n"
+        "print board\n"
+        "wait 5000\n"
+        "click 150 50\n"
+        "click 250 50\n"
+        "wait 1000\n"
         "print board\n"
     )
-    expected = ". . wR ."
+    expected = ". wR . .\n. . wR ."
     assert run(script).strip() == expected
 # ====================================================================
 # בדיקות מיוחדות לאיטרציה 8 - קונפליקטים מורכבים בזמן אמת

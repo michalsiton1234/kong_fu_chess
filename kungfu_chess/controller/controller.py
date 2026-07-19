@@ -22,13 +22,22 @@ class Controller:
         self._game_engine = game_engine
         self._board_mapper = board_mapper or BoardMapper()
         self._selected_piece: Optional[Piece] = None
+        self._last_failed_destination: Optional[Position] = None
 
     def reset(self) -> None:
         self._selected_piece = None
+        self._last_failed_destination = None
 
     @property
     def selected_piece(self) -> Optional[Piece]:
         return self._selected_piece
+
+    @property
+    def last_failed_destination(self) -> Optional[Position]:
+        return self._last_failed_destination
+
+    def clear_failed_destination(self) -> None:
+        self._last_failed_destination = None
 
     def handle_click(self, board: Board, x: int, y: int) -> None:
         if self._game_engine.game_over:
@@ -87,6 +96,8 @@ class Controller:
             return
         if self._game_engine.arbiter.is_piece_airborne(clicked_piece):
             return
+        if self._game_engine.arbiter.is_piece_resting(clicked_piece):
+            return
         self._selected_piece = clicked_piece
 
     def _change_selection(
@@ -98,6 +109,8 @@ class Controller:
         if self._game_engine.arbiter.is_piece_moving(position):
             return
         if self._game_engine.arbiter.is_piece_airborne(clicked_piece):
+            return
+        if self._game_engine.arbiter.is_piece_resting(clicked_piece):
             return
         self._selected_piece = clicked_piece
 
@@ -114,6 +127,9 @@ class Controller:
         if self._game_engine.arbiter.is_piece_airborne(self._selected_piece):
             self._selected_piece = None
             return
+        if self._game_engine.arbiter.is_piece_resting(self._selected_piece):
+            self._selected_piece = None
+            return
 
         allow_premove = (
             not self._game_engine.validate_move(
@@ -123,11 +139,14 @@ class Controller:
             and clicked_piece.color == self._selected_piece.color
         )
 
-        self._game_engine.request_move(
+        self._last_failed_destination = None
+        accepted = self._game_engine.request_move(
             board,
             self._selected_piece,
             source,
             destination,
             allow_premove=allow_premove,
         )
+        if not accepted:
+            self._last_failed_destination = destination
         self._selected_piece = None
